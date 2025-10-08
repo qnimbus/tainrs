@@ -1,16 +1,19 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: App Exists
-description: Return true or false if the app exists in the container registry
+description: Check if a container package exists in the GitHub Container Registry
+# Required permissions in calling workflow:
+# permissions:
+#   packages: read
 
 inputs:
   app:
-    description: App Name
+    description: Name of the container package to check
     required: true
 
 outputs:
   exists:
-    description: App Exists
+    description: Boolean string ('true' or 'false') indicating if the package exists
     value: ${{ steps.app.outputs.exists }}
 
 runs:
@@ -24,6 +27,14 @@ runs:
       with:
         script: |-
           const app = process.env.APP;
+          
+          // Input validation
+          if (!app || app.trim() === '') {
+            core.setFailed('App name cannot be empty');
+            return;
+          }
+          
+          core.info(`Checking if container package '${app}' exists for ${context.repo.owner}`);
 
           const { data: user } = await github.rest.users.getByUsername({
               username: context.repo.owner,
@@ -39,7 +50,11 @@ runs:
                   });
                   pkg = data;
               } catch (error) {
-                  if (error.status !== 404) {
+                  if (error.status === 404) {
+                      // Package not found - this is expected
+                  } else if (error.status === 403) {
+                      core.warning(`Access denied when checking package '${app}'. Package may be private or permissions insufficient.`);
+                  } else {
                       throw error;
                   }
               }
@@ -52,10 +67,16 @@ runs:
                   });
                   pkg = data;
               } catch (error) {
-                  if (error.status !== 404) {
+                  if (error.status === 404) {
+                      // Package not found - this is expected
+                  } else if (error.status === 403) {
+                      core.warning(`Access denied when checking package '${app}'. Package may be private or permissions insufficient.`);
+                  } else {
                       throw error;
                   }
               }
           }
 
-          core.setOutput('exists', typeof pkg !== "undefined");
+          const exists = typeof pkg !== "undefined";
+          core.info(`Package '${app}' ${exists ? 'exists' : 'does not exist'} in the registry`);
+          core.setOutput('exists', exists);
