@@ -1,0 +1,6 @@
+---
+schemaVersion: "2.0.0"
+fileExistenceTests:
+  - name: external-secrets
+    path: /bin/external-secrets
+    shouldExist: true
